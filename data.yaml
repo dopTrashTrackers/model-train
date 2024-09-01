@@ -1,0 +1,15 @@
+train: ../trash-detection.v35-avec-toutes-les-data-augmentation-dt-contrast-29.yolov5pytorch/train/images
+val: ../trash-detection.v35-avec-toutes-les-data-augmentation-dt-contrast-29.yolov5pytorch/valid/images
+test: ../trash-detection.v35-avec-toutes-les-data-augmentation-dt-contrast-29.yolov5pytorch/test/images
+
+nc: 29
+names: ['Aluminium foil', 'Bottle cap', 'Broken glass', 'Cigarette', 'Clear plastic bottle', 'Crisp packet', 'Cup', 'Drink can', 'Food Carton', 'Food container', 'Food waste', 'Garbage bag', 'Glass bottle', 'Lid', 'Other Carton', 'Other can', 'Other container', 'Other plastic bottle', 'Other plastic wrapper', 'Other plastic', 'Paper bag', 'Paper', 'Plastic bag wrapper', 'Plastic film', 'Pop tab', 'Single-use carrier bag', 'Straw', 'Styrofoam piece', 'Unlabeled litter']
+
+roboflow:
+  workspace: nora-slimani
+  project: trash-detection-otdmj
+  version: 35
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/nora-slimani/trash-detection-otdmj/dataset/35
+
+
