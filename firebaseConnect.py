@@ -36,7 +36,6 @@ def non_max_suppression(boxes, scores, iou_threshold):
     else:
         return []
 
-
 # Function to process frame through ONNX model and get bounding boxes
 def detect_trash(frame):
     # Preprocess the frame (assuming input size 640x640)
@@ -44,26 +43,21 @@ def detect_trash(frame):
     img = cv2.resize(frame, input_size)
     img = img.astype(np.float32) / 255.0  # Normalize to [0, 1]
 
-
     # Transpose the image from HWC (Height, Width, Channels) to CHW (Channels, Height, Width)
     img = np.transpose(img, (2, 0, 1))
     img = np.expand_dims(img, axis=0)  # Add batch dimension
-
 
     # Run the model inference
     input_name = session.get_inputs()[0].name
     result = session.run(None, {input_name: img})
 
-
     # Extract the model output
     output = result[0]  # [1, 25200, 34]
     output = np.squeeze(output, axis=0)  # Remove batch dimension, shape becomes [25200, 34]
 
-
     bboxes = []
     confidences = []
     class_ids = []
-
 
     for detection in output:
         # Extract the box coordinates and confidence
@@ -71,12 +65,10 @@ def detect_trash(frame):
         confidence = detection[4]  # Objectness score
         class_scores = detection[5:]  # Class probabilities
 
-
         if confidence > CONFIDENCE_THRESHOLD:
             # Get the class with the highest score
             class_id = np.argmax(class_scores)
             class_confidence = class_scores[class_id]
-
 
             if class_confidence > CONFIDENCE_THRESHOLD:
                 # Convert the center x, y, width, height to x1, y1, x2, y2 (top-left and bottom-right)
@@ -84,7 +76,6 @@ def detect_trash(frame):
                 y1 = int((y_center - height / 2) * frame.shape[0])
                 x2 = int((x_center + width / 2) * frame.shape[1])
                 y2 = int((y_center + height / 2) * frame.shape[0])
-
 
                 bboxes.append([x1, y1, x2, y2])
                 confidences.append(float(confidence))
