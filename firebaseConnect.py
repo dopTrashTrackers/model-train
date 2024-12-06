@@ -189,6 +189,36 @@ async def capture_and_detect():
         
 
 
+        # alert key handling
+        for post_office_id in post_office_ids:
+            # Handle the alert key
+            alert_ref = ref.child(f'{post_office_id}/alert')
+            alert_data = alert_ref.get()
+
+            if alert_data is None:  # If alert key is not present, initialize it
+                alert_data = 0
+                alert_ref.set(alert_data)
+
+            # Calculate the non-compliant percentage
+            non_compliant_percentage = (alert_data / 8) * 100
+
+            # Calculate the compliant percentage
+            compliant_percentage = 100 - non_compliant_percentage
+
+            # Update compliant and non-compliant keys
+            compliant_ref = ref.child(f'{post_office_id}/compliant')
+            non_compliant_ref = ref.child(f'{post_office_id}/non-compliant')
+
+            if compliant_ref.get() is None:  # Add compliant key if not present
+                compliant_ref.set(compliant_percentage)
+            else:  # Update compliant value
+                compliant_ref.set(compliant_percentage)
+
+            if non_compliant_ref.get() is None:  # Add non-compliant key if not present
+                non_compliant_ref.set(non_compliant_percentage)
+            else:  # Update non-compliant value
+                non_compliant_ref.set(non_compliant_percentage)
+
 
         
         # Print the detected classes and confidences
