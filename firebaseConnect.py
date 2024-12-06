@@ -199,7 +199,7 @@ async def capture_and_detect():
             if class_data and 'frequency' in class_data:
                 class_ref.update({'frequency': class_data['frequency'] + 1})
             else:
-                class_ref.update({'frequency': 1})
+                class_ref.update({'frequency': 1, 'type': CLASSES[class_id]})
 
 
             print(f"Detected {CLASSES[class_id]} with confidence {confidences[i]}")
