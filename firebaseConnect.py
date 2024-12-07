@@ -10,7 +10,7 @@ from datetime import datetime
 # Load the ONNX model
 import os
 
-onnx_model_path = "C:\\Users\\rohan\\Desktop\\ml-sih\\model-train\\bestm.onnx"
+onnx_model_path = "bestm.onnx"
 
 if not os.path.exists(onnx_model_path):
     raise FileNotFoundError(f"Model file not found: {onnx_model_path}")
@@ -110,9 +110,10 @@ def draw_boxes(frame, bboxes, class_ids, confidences):
         # Draw label and confidence
         label = f"{CLASSES[class_id]}: {confidence:.2f}"
         cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+    return frame
 
 
-cred = credentials.Certificate("C:\\Users\\rohan\\Desktop\\ml-sih\\model-train\\credentials.json")
+cred = credentials.Certificate("credentials.json")
 firebase_admin.initialize_app(cred,{'databaseURL': "https://sih2024-559e6-default-rtdb.firebaseio.com/"})
 
 
@@ -139,39 +140,28 @@ post_office_ids = [
 async def capture_and_detect():
     cap = cv2.VideoCapture(0)
     while True:
-
-
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-
-        # Detect trash in the frame
-        bboxes, confidences, class_ids = detect_trash(frame)
-
-
-        # Draw bounding boxes on the frame
-        draw_boxes(frame, bboxes, class_ids, confidences)
-       
-        
-        
-        # Display the frame
-        cv2.imshow('Trash Detection', frame)
-
-
-        # # Save the frame to Firebase
-        # _, buffer = cv2.imencode('.jpg', frame)
-        # image_data = buffer.tobytes()
-        # ref.push({'image': image_data})
-
-        total_detections = len(class_ids)
-
-        # Get today's date in "YYYY-MM-DD" format
-        today = datetime.now().strftime('%Y-%m-%d')
-
         
         for post_office_id in post_office_ids:
+
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            # Detect trash in the frame
+            bboxes, confidences, class_ids = detect_trash(frame)
+
+            # Draw bounding boxes on the frame
+            frame = draw_boxes(frame, bboxes, class_ids, confidences)
+        
+            # Display the frame
+            cv2.imshow('Trash Detection', frame)
+
+            total_detections = len(class_ids)
+
+            # Get today's date in "YYYY-MM-DD" format
+            today = datetime.now().strftime('%Y-%m-%d')
             
+            # for line chart
             garbage_data_ref = ref.child(f'{post_office_id}/garbageDetectionData/{today}')
             day_data = garbage_data_ref.get()
 
@@ -187,10 +177,7 @@ async def capture_and_detect():
                 # If the date node doesn't exist, create it with the detections
                 garbage_data_ref.set({'detections': total_detections})
         
-
-
-        # alert key handling
-        for post_office_id in post_office_ids:
+            # alert key handling
             # Handle the alert key
             alert_ref = ref.child(f'{post_office_id}/alert')
             alert_data = alert_ref.get()
@@ -221,18 +208,23 @@ async def capture_and_detect():
 
 
         
-        # Print the detected classes and confidences
-        for i, class_id in enumerate(class_ids):
-            class_ref = ref.child(f'-O6AlggG6a7efBfMAB3z/garbageTypeData/{class_id}')
-            class_data = class_ref.get()
-            print(class_data)##########
-            if class_data and 'frequency' in class_data:
-                class_ref.update({'frequency': class_data['frequency'] + 1})
-            else:
-                class_ref.update({'frequency': 1, 'type': CLASSES[class_id]})
+            # Bar chart k liye and detection_time_table k liye
+            detection_time_ref = ref.child(f'{post_office_id}/detectionTimeTableData')
+    
+            for i, class_id in enumerate(class_ids):
+                class_ref = ref.child(f'{post_office_id}/garbageTypeData/{class_id}')
+                class_data = class_ref.get()
+                if class_data and 'frequency' in class_data:
+                    class_ref.update({'frequency': class_data['frequency'] + 1})
+                else:
+                    class_ref.update({'frequency': 1, 'type': CLASSES[class_id]})
 
-
-            print(f"Detected {CLASSES[class_id]} with confidence {confidences[i]}")
+                detection_time_ref.push({
+                    'place': 'Lobby',
+                    'type': CLASSES[class_id],
+                    'time': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                })
+                print(f"Detected {CLASSES[class_id]} with confidence {confidences[i]}")
 
         
         # Check for 'q' key to exit the loop
@@ -240,8 +232,8 @@ async def capture_and_detect():
             break
 
 
-        # Wait for 5 seconds
-        await asyncio.sleep(5)
+        # Wait for 1 seconds
+        await asyncio.sleep(1)
 
 
     cap.release()
