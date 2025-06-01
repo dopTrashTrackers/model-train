@@ -1,0 +1,37 @@
+Detection and Alert Generation Thresholds Explanation
+------------------------------------------------------
+
+1. Detection Process:
+   -------------------
+   - The system uses an ONNX model to detect various types of garbage in real-time from a camera feed.
+   - Each frame is processed to identify objects from 29 predefined garbage classes.
+   - For each frame, the model outputs bounding boxes, confidence scores, and predicted class IDs.
+   - Detection is only considered valid if:
+     - Objectness confidence > 0.5
+     - Class confidence > 0.5
+   - Non-Maximum Suppression (NMS) with IoU threshold of 0.4 is applied to reduce overlapping boxes.
+
+2. Firebase Updates:
+   ------------------
+   For each post office:
+   - `/garbageDetectionData/{YYYY-MM-DD}/detections`: Incremented with the number of garbage detections per frame.
+   - `/garbageTypeData/{class_id}`: Tracks frequency and type of each detected garbage class.
+   - `/detectionTimeTableData`: Logs each detection event with timestamp, location, and garbage type.
+
+3. Alert Threshold Logic:
+   -----------------------
+   - The system maintains an `alert` count in Firebase for each post office.
+   - Every time a new frame is processed, it uses the current `alert` value to determine compliance:
+     - `non_compliant_percentage = (alert / 8) * 100`
+     - `compliant_percentage = 100 - non_compliant_percentage`
+   - These are written to:
+     - `/compliant`: percentage of time area is clean
+     - `/non-compliant`: percentage of time area had garbage
+   - The value `8` is a threshold divisor—representing 8 possible alert intervals or inspection windows.
+
+4. Customizations:
+   ------------------
+   - Consider raising the threshold confidence or adjusting NMS IoU for stricter detection.
+   - Tune the alert threshold logic based on detection severity.
+
+This document is intended to clarify the internal logic of detection and alert computation used for monitoring post office cleanliness.
