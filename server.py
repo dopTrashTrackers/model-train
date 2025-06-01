@@ -1,6 +1,6 @@
 
-# pip install fastapi uvicorn onnxruntime opencv-python python-multipart
-# pip install websockets
+# # pip install fastapi uvicorn onnxruntime opencv-python python-multipart
+# # pip install websockets
 
 import numpy as np
 import cv2
@@ -31,7 +31,17 @@ CONFIDENCE_THRESHOLD = 0.5
 NMS_THRESHOLD = 0.4
 
 # Assuming 29 classes for the model
-CLASSES = ['Aluminium foil', 'Bottle cap', 'Broken glass', 'Cigarette', 'Clear plastic bottle', 'Crisp packet', 'Cup', 'Drink can', 'Food Carton', 'Food container', 'Food waste', 'Garbage bag', 'Glass bottle', 'Lid', 'Other Carton', 'Other can', 'Other container', 'Other plastic bottle', 'Other plastic wrapper', 'Other plastic', 'Paper bag', 'Paper', 'Plastic bag wrapper', 'Plastic film', 'Pop tab', 'Single-use carrier bag', 'Straw', 'Styrofoam piece', 'Unlabeled litter']
+CLASSES = ['Aluminium foil', 'Bottle cap', 'Broken glass', 'Cigarette', 'Clear plastic bottle', 'Crisp packet', 
+           'Cup', 'Drink can', 'Food Carton', 'Food container', 'Food waste', 'Garbage bag', 'Glass bottle', 
+           'Lid', 'Other Carton', 'Other can', 'Other container', 'Other plastic bottle', 'Other plastic wrapper', 
+           'Other plastic', 'Paper bag', 'Paper', 'Plastic bag wrapper', 'Plastic film', 'Pop tab', 
+           'Single-use carrier bag', 'Straw', 'Styrofoam piece', 'Unlabeled litter']
+
+# Threshold-based alert settings
+DETECTION_THRESHOLD = 20  # Spillage area threshold in percent
+ALERT_COUNT_THRESHOLD = 10  # Number of times threshold is exceeded to trigger an alert
+detection_counter = 0  # Counts consecutive threshold exceedances
+alert_triggered = False  # Track if alert has been triggered
 
 # Function to perform non-maximum suppression (NMS)
 def non_max_suppression(boxes, scores, iou_threshold):
@@ -40,6 +50,13 @@ def non_max_suppression(boxes, scores, iou_threshold):
         return indices.flatten()
     else:
         return []
+
+# Function to calculate area of detected trash
+def calculate_spillage_area(bboxes, frame_size):
+    frame_area = frame_size[0] * frame_size[1]
+    trash_area = sum((x2 - x1) * (y2 - y1) for x1, y1, x2, y2 in bboxes)
+    spillage_percentage = (trash_area / frame_area) * 100
+    return spillage_percentage
 
 # Function to process frame through ONNX model and get bounding boxes
 def detect_trash(frame):
@@ -63,6 +80,7 @@ def detect_trash(frame):
     bboxes = []
     confidences = []
     class_ids = []
+    detected_classes = []
 
     for detection in output:
         # Extract the box coordinates and confidence
@@ -85,6 +103,7 @@ def detect_trash(frame):
                 bboxes.append([x1, y1, x2, y2])
                 confidences.append(float(confidence))
                 class_ids.append(class_id)
+                detected_classes.append(CLASSES[class_id])
 
     # Perform non-maximum suppression to filter overlapping boxes
     indices = non_max_suppression(bboxes, confidences, NMS_THRESHOLD)
@@ -93,8 +112,9 @@ def detect_trash(frame):
     final_bboxes = [bboxes[i] for i in indices]
     final_confidences = [confidences[i] for i in indices]
     final_class_ids = [class_ids[i] for i in indices]
+    final_detected_classes = [detected_classes[i] for i in indices]
 
-    return final_bboxes, final_confidences, final_class_ids
+    return final_bboxes, final_confidences, final_class_ids, final_detected_classes
 
 # Function to draw bounding boxes on the frame
 def draw_boxes(frame, bboxes, class_ids, confidences):
@@ -110,49 +130,60 @@ def draw_boxes(frame, bboxes, class_ids, confidences):
         label = f"{CLASSES[class_id]}: {confidence:.2f}"
         cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
 
-# WebSocket route to stream video with trash detection
+# WebSocket route with threshold-based alert system
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    global detection_counter, alert_triggered
+
     await websocket.accept()
-    
-    # Capture video from the webcam
     cap = cv2.VideoCapture(0)
-    
+
     if not cap.isOpened():
-        print("Error: Unable to open webcam.")
         await websocket.send_text("Error: Unable to open webcam.")
         await websocket.close()
         return
-    
+
     while True:
         ret, frame = cap.read()
         if not ret:
-            print("Error: Failed to capture frame from webcam.")
             break
 
-        # Perform trash detection on the current frame
-        bboxes, confidences, class_ids = detect_trash(frame)
-        
-        # Draw bounding boxes around detected trash
+        # Perform trash detection
+        bboxes, confidences, class_ids, detected_classes = detect_trash(frame)
+
+        # Print detected classes to terminal
+        print("Detected Classes:", detected_classes)
+
+        # Calculate spillage percentage
+        spillage_percentage = calculate_spillage_area(bboxes, frame.shape[:2])
+
+        # Update detection counter and check threshold
+        if spillage_percentage > DETECTION_THRESHOLD:
+            detection_counter += 1
+        else:
+            detection_counter = 0  # Reset if threshold is not exceeded
+
+        # Trigger an alert if threshold is met
+        if detection_counter >= ALERT_COUNT_THRESHOLD and not alert_triggered:
+            alert_triggered = True
+            detection_counter = 0  # Reset counter after alert
+            await websocket.send_text("Alert: Trash spillage exceeded threshold!")
+
+        # Draw boxes on the frame
         draw_boxes(frame, bboxes, class_ids, confidences)
 
-        # Encode the frame as a JPEG image to send it via WebSocket
+        # Send frame and detected classes via WebSocket
         _, buffer = cv2.imencode('.jpg', frame)
         frame_bytes = buffer.tobytes()
-
-        # Send the frame to the client
         await websocket.send_bytes(frame_bytes)
+        await websocket.send_text(f"Detected Classes: {', '.join(detected_classes)}")
 
-        # Output the detection results in the terminal
-        for i, class_id in enumerate(class_ids):
-            print(f"Detected {CLASSES[class_id]} with confidence {confidences[i]}")
-
-        # Add a small delay to prevent overloading the WebSocket stream
+        # Small delay to prevent overloading
         await asyncio.sleep(0.03)
 
     cap.release()
 
-# Serve a basic HTML page to display the webcam feed
+# Serve a basic HTML page to display the webcam feed and detected classes
 @app.get("/", response_class=HTMLResponse)
 async def dashboard():
     html_content = """
@@ -163,24 +194,29 @@ async def dashboard():
         <body>
             <h1>Trash Detection</h1>
             <img id="video-feed" src="" alt="Webcam feed">
+            <p id="detected-classes">Detected Classes: None</p>
             <script>
                 const videoFeed = document.getElementById('video-feed');
+                const detectedClasses = document.getElementById('detected-classes');
                 const ws = new WebSocket('ws://localhost:8000/ws');
                 
                 ws.onmessage = function(event) {
-                    const blob = new Blob([event.data], { type: 'image/jpeg' });
-                    const url = URL.createObjectURL(blob);
-                    videoFeed.src = url;
+                    if (typeof event.data === 'string') {
+                        if (event.data.startsWith("Alert")) {
+                            alert(event.data);  // Alert text message for alerts
+                        } else {
+                            detectedClasses.innerText = event.data;
+                        }
+                    } else {
+                        const blob = new Blob([event.data], {type: 'image/jpeg'});
+                        videoFeed.src = URL.createObjectURL(blob);
+                    }
                 };
             </script>
         </body>
     </html>
     """
-    return html_content
+    return HTMLResponse(content=html_content)
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-
-    # run command- uvicorn server:app --reload
-
+# Run the app
+# To run, use: uvicorn this_file_name:app 
