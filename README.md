@@ -117,10 +117,10 @@ In low-light scenarios, YOLO may underperform. To combat this, we integrated:
   </tr>
   <tr>
     <td align="center">
-      <img src="assets/alert_email.png" alt="Garbage Alert Email" width="400"/>
+      <img src="static/model_insights/email.png" alt="Garbage Alert Email" width="400"/>
     </td>
     <td align="center">
-      <img src="assets/dashboard_integration.png" alt="Dashboard UI" width="600"/>
+      <img src="static/model_insights/dashboard_integration.png" alt="Dashboard UI" width="600"/>
     </td>
   </tr>
 </table>
